@@ -1,0 +1,41 @@
+name: 'Testing'
+
+on:
+  workflow_call:
+  push:
+    branches:
+      - master
+      - develop
+  pull_request:
+    branches:
+      - master
+      - develop
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+        go: [1.19]
+    runs-on: ${{ matrix.os }}
+    container: golang:${{ matrix.go }}-bullseye
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - uses: actions/cache@v2
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      - name: Test ${{ matrix.go }}
+        run: |
+          cp config.example.yml config.yml
+          make RACE=1 test
+      # - uses: codecov/codecov-action@v1
+      #   with:
+      #     token: ${{ secrets.CODECOV_TOKEN }}
+      #     file: ./coverage.txt
+      #     flags: tests
+      #     name: codecov-umbrella
+      #     fail_ci_if_error: true
+      #     verbose: true
