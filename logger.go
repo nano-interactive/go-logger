@@ -1,95 +1,96 @@
 package logging
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"io"
-	"os"
-	"os/signal"
-	"sync"
 	"sync/atomic"
 
-	"github.com/rs/zerolog"
+	"github.com/nano-interactive/go-logger/serializer"
 )
 
-const (
-	defaultBufferSize      = 8192
-	defaultFilePermissions = 0o644
+var (
+	_ io.Closer = &Logger[any]{}
+	_ Log[any]  = &Logger[any]{}
 )
-
-var _ io.Closer = &Logger[any]{}
 
 type (
+	Error interface {
+		Print(string, ...any)
+	}
+
 	Log[T any] interface {
 		Log(T) error
 		LogMultiple([]T) error
+		swap(io.Writer) *io.Writer
 	}
 
 	Logger[T any] struct {
-		file   string
-		logger zerolog.Logger
-		pool   *sync.Pool
-		handle *atomic.Pointer[os.File]
+		error      Error
+		ctx        context.Context
+		serializer serializer.Interface[T]
+		handle     *atomic.Pointer[io.Writer]
+		delimiter  rune
 	}
 )
 
 // #nosec G304
-func open(file string, logger zerolog.Logger) *os.File {
-	f, err := os.OpenFile(file, os.O_CREATE|os.O_APPEND|os.O_WRONLY, defaultFilePermissions)
-	if err != nil {
-		logger.Fatal().
-			Err(err).
-			Str("file", file).
-			Str("flags", "O_CREATE|O_APPEND|O_WRONLY").
-			Msg("failed to open log file")
+// func open(file string, logger zerolog.Logger) *os.File {
+// 	f, err := os.OpenFile(file, os.O_CREATE|os.O_APPEND|os.O_WRONLY, defaultFilePermissions)
+// 	if err != nil {
+// 		logger.Fatal().
+// 			Err(err).
+// 			Str("file", file).
+// 			Str("flags", "O_CREATE|O_APPEND|O_WRONLY").
+// 			Msg("failed to open log file")
+// 	}
+
+// 	return f
+// }
+
+func New[T any](w io.Writer, modifiers ...Modifier[T]) *Logger[T] {
+	cfg := Config[T]{
+		ctx:        context.Background(),
+		serializer: serializer.NewJson[T](),
+		logger:     nopErrorLog,
+		delimiter:  '\n',
 	}
 
-	return f
-}
-
-func New[T any](ctx context.Context, file string, logger zerolog.Logger, reopenSignal os.Signal) *Logger[T] {
-	ch := make(chan os.Signal, 1000)
-
-	signal.Notify(ch, reopenSignal)
+	for _, modifier := range modifiers {
+		modifier(&cfg)
+	}
 
 	l := &Logger[T]{
-		file:   file,
-		logger: logger,
-		pool: &sync.Pool{
-			New: func() any {
-				return bytes.NewBuffer(make([]byte, 0, defaultBufferSize))
-			},
-		},
-		handle: new(atomic.Pointer[os.File]),
+		ctx:        cfg.ctx,
+		serializer: cfg.serializer,
+		handle:     new(atomic.Pointer[io.Writer]),
 	}
 
-	l.handle.Store(open(file, logger))
-
-	go func() {
-		closeFile := func(h *os.File) {
-			if err := h.Close(); err != nil {
-				logger.Fatal().
-					Err(err).
-					Str("file", file).
-					Str("flags", "O_CREATE|O_APPEND|O_WRONLY").
-					Msg("Failed to close old log file handle")
-			}
-		}
-
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ch:
-				logger.Info().Msg("reopening log file")
-				old := l.handle.Swap(open(file, logger))
-				closeFile(old)
-			}
-		}
-	}()
+	l.handle.Store(&w)
 
 	return l
+
+	// go func() {
+	// 	closeFile := func(h *os.File) {
+	// 		if err := h.Close(); err != nil {
+	// 			logger.Fatal().
+	// 				Err(err).
+	// 				Str("file", file).
+	// 				Str("flags", "O_CREATE|O_APPEND|O_WRONLY").
+	// 				Msg("Failed to close old log file handle")
+	// 		}
+	// 	}
+
+	// 	for {
+	// 		select {
+	// 		case <-ctx.Done():
+	// 			return
+	// 		case <-ch:
+	// 			logger.Info().Msg("reopening log file")
+	// 			old := l.handle.Swap(open(file, logger))
+	// 			closeFile(old)
+	// 		}
+	// 	}
+	// }()
 }
 
 //go:inline
@@ -100,52 +101,38 @@ func (l *Logger[T]) Log(data T) error {
 	return l.LogMultiple(many[:])
 }
 
+const notEnoughBytesWritten = "{\"msg\":\"failed to write all data to the writer\",\"actualLen\":%d,\"expectedLen\":%d}"
+
 func (l *Logger[T]) LogMultiple(data []T) error {
-	buffer := l.pool.Get().(*bytes.Buffer)
-	defer buffer.Reset()
-	defer l.pool.Put(buffer)
-
-	for _, d := range data {
-		data, err := json.Marshal(d)
-		if err != nil {
-			l.logger.Error().
-				Interface("data", d).
-				Msg("Failed to serialize data")
-			continue
-		}
-
-		buffer.Write(data)
-		buffer.WriteByte('\n')
+	rawData, err := l.serializer.SerializeMultipleWithDelimiter(data, l.delimiter)
+	if err != nil {
+		return err
 	}
-
-	rawData := buffer.Bytes()
 
 	file := l.handle.Load()
 
-	n, err := file.Write(rawData)
+	n, err := (*file).Write(rawData)
 	if err != nil {
-		l.logger.Error().
-			Err(err).
-			Str("file", l.file).
-			Str("flags", "O_CREATE|O_APPEND|O_WRONLY").
-			Int("expectedLen", len(rawData)).
-			Msg("Failed to Write data to file")
 		return err
 	}
 
 	if n != len(rawData) {
-		l.logger.Warn().
-			Str("file", l.file).
-			Int("expected", len(rawData)).
-			Int("actual", n).
-			Msg("Failed to write all data")
+		l.error.Print(notEnoughBytesWritten, n, len(rawData))
 	}
 
 	return nil
 }
 
+func (l *Logger[T]) swap(w io.Writer) *io.Writer {
+	return l.handle.Swap(&w)
+}
+
 func (l *Logger[T]) Close() error {
 	file := l.handle.Load()
 
-	return file.Close()
+	if closer, ok := (*file).(io.Closer); ok {
+		return closer.Close()
+	}
+
+	return nil
 }
