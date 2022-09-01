@@ -1,9 +1,10 @@
 package logging
 
-var _ Error = &NopErrorLogger{}
-var nopErrorLog = &NopErrorLogger{}
+var (
+	_           Error = NopErrorLogger{}
+	nopErrorLog       = NopErrorLogger{}
+)
 
 type NopErrorLogger struct{}
 
-func (l *NopErrorLogger) Print(string, ...any) {}
-
+func (l NopErrorLogger) Print(string, ...any) {}

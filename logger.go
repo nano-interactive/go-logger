@@ -1,7 +1,6 @@
 package logging
 
 import (
-	"context"
 	"io"
 
 	"github.com/nano-interactive/go-logger/serializer"
@@ -24,7 +23,6 @@ type (
 
 	Logger[T any, TSerializer serializer.Interface[T]] struct {
 		error      Error
-		ctx        context.Context
 		serializer TSerializer
 		handle     io.Writer
 		delimiter  rune
@@ -33,7 +31,6 @@ type (
 
 func New[T any, TSerializer serializer.Interface[T]](w io.Writer, serializer TSerializer, modifiers ...Modifier[T]) *Logger[T, TSerializer] {
 	cfg := Config[T]{
-		ctx:       context.Background(),
 		logger:    nopErrorLog,
 		delimiter: '\n',
 	}
@@ -43,7 +40,6 @@ func New[T any, TSerializer serializer.Interface[T]](w io.Writer, serializer TSe
 	}
 
 	l := &Logger[T, TSerializer]{
-		ctx:        cfg.ctx,
 		serializer: serializer,
 		handle:     w,
 	}

@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/nano-interactive/go-logger/__mocks__/error_log"
 	"github.com/nano-interactive/go-logger/__mocks__/serializer"
 	"github.com/nano-interactive/go-logger/__mocks__/writer"
 )
@@ -123,7 +124,7 @@ func TestLogMultipleNotEnoughBytesWritten(t *testing.T) {
 		{Name: "test 2"},
 	}
 
-	l := newMockLogger()
+	l := error_log.NewMockLogger()
 
 	logger := &Logger[logData, *serializer.MockSerializer[logData]]{
 		serializer: ser,
