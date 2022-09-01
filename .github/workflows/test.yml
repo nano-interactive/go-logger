@@ -29,7 +29,6 @@ jobs:
             ${{ runner.os }}-go-
       - name: Test ${{ matrix.go }}
         run: |
-          cp config.example.yml config.yml
           make RACE=1 test
       # - uses: codecov/codecov-action@v1
       #   with:
