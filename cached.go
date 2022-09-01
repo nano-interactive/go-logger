@@ -4,8 +4,6 @@ import (
 	"context"
 	"io"
 	"sync/atomic"
-
-	"github.com/rs/zerolog"
 )
 
 var _ io.Closer = &CachedLogging[any]{}
@@ -23,7 +21,7 @@ type CachedLogging[T any] struct {
 	idx    uint64
 }
 
-func logWorker[T any](ctx context.Context, logger zerolog.Logger, log Log[T], ch <-chan T, flushRate, retryCount int) {
+func logWorker[T any](ctx context.Context, log Log[T], ch <-chan T, flushRate, retryCount int) {
 	cache := make([]T, 0, flushRate)
 	retryQueue := make([]T, 0, flushRate)
 
@@ -47,14 +45,6 @@ func logWorker[T any](ctx context.Context, logger zerolog.Logger, log Log[T], ch
 					dataToWrite = retryQueue
 					hasCopied = true
 				}
-
-				logger.Error().
-					Err(err).
-					Int("retry_count", i).
-					Int("max_retry_count", retryCount).
-					Int("flushRate", flushRate).
-					Bool("is_dropping_payload", i == retryCount-1).
-					Msg("Failed to log data")
 			}
 		}
 
@@ -65,10 +55,7 @@ func logWorker[T any](ctx context.Context, logger zerolog.Logger, log Log[T], ch
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Info().Int("logs_count", len(cache)).Msg("Flushing rest of the cached logs to file")
-
 			retryWrite()
-
 			return
 		case data := <-ch:
 			if len(cache) >= flushRate {
@@ -80,7 +67,35 @@ func logWorker[T any](ctx context.Context, logger zerolog.Logger, log Log[T], ch
 	}
 }
 
-func NewCached[T any](ctx context.Context, logger zerolog.Logger, log Log[T], config CachedLoggingConfig) *CachedLogging[T] {
+var DefaultCachedConfig = CachedLoggingConfig{
+	Workers:    1,
+	BufferSize: 1024,
+	FlushRate:  1,
+	RetryCount: 1,
+}
+
+func NewCached[T any](ctx context.Context, log Log[T], cfg ...CachedLoggingConfig) *CachedLogging[T] {
+	config := DefaultCachedConfig
+
+	if len(cfg) > 0 {
+		fromArgs := cfg[0]
+
+		if fromArgs.Workers > 1 {
+			config.Workers = fromArgs.Workers
+		}
+
+		if fromArgs.BufferSize > 0 {
+			config.BufferSize = fromArgs.BufferSize
+		}
+
+		if fromArgs.FlushRate > 0 {
+			config.FlushRate = fromArgs.FlushRate
+		}
+		if fromArgs.RetryCount > 1 {
+			config.RetryCount = fromArgs.RetryCount
+		}
+	}
+
 	chs := make([]chan T, config.Workers)
 	cancelFns := make([]context.CancelFunc, 0, config.Workers)
 
@@ -88,7 +103,7 @@ func NewCached[T any](ctx context.Context, logger zerolog.Logger, log Log[T], co
 		chs[i] = make(chan T, config.BufferSize)
 		workerCtx, cancel := context.WithCancel(context.Background())
 		cancelFns = append(cancelFns, cancel)
-		go logWorker(workerCtx, logger, log, chs[i], config.FlushRate, config.RetryCount)
+		go logWorker(workerCtx, log, chs[i], config.FlushRate, config.RetryCount)
 	}
 
 	go func(ctx context.Context) {

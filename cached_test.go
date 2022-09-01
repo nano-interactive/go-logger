@@ -1,5 +1,33 @@
 package logging
 
+import (
+	"context"
+	"testing"
+
+	"github.com/nano-interactive/go-logger/__mocks__/logger"
+	"github.com/stretchr/testify/require"
+)
+
+func TestNewWithCancel(t *testing.T) {
+	t.Parallel()
+	assert := require.New(t)
+
+	mockLogger := &logger.MockLogger{}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	defer cancel()
+
+	cached := NewCached[any](ctx, mockLogger, CachedLoggingConfig{
+		Workers:    2,
+		BufferSize: 2000,
+		FlushRate:  100,
+		RetryCount: 2,
+	})
+
+	assert.NotNil(cached)
+}
+
 // import (
 // 	"context"
 // 	"path/filepath"

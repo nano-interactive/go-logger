@@ -3,8 +3,6 @@ package logging
 import (
 	"bytes"
 	"errors"
-	"io"
-	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -21,25 +19,22 @@ func TestLogMultiple(t *testing.T) {
 	t.Parallel()
 	assert := require.New(t)
 
-	w := new(atomic.Pointer[io.Writer])
 	buff := bytes.NewBuffer(make([]byte, 0, 100))
-	var writer io.Writer = buff
-	w.Store(&writer)
 
-	serializer := &serializer.MockSerializer[logData]{}
+	ser := &serializer.MockSerializer[logData]{}
 
 	data := []logData{
 		{Name: "test 1"},
 		{Name: "test 2"},
 	}
 
-	logger := &Logger[logData]{
-		serializer: serializer,
-		handle:     w,
+	logger := &Logger[logData, *serializer.MockSerializer[logData]]{
+		serializer: ser,
+		handle:     buff,
 		delimiter:  '\n',
 	}
 
-	serializer.
+	ser.
 		On("SerializeMultipleWithDelimiter", data, '\n').
 		Return([]byte{0x1, '\n', 0x2, '\n'}, nil)
 
@@ -48,26 +43,26 @@ func TestLogMultiple(t *testing.T) {
 	assert.NoError(err)
 
 	assert.EqualValues([]byte{0x1, '\n', 0x2, '\n'}, buff.Bytes())
-	serializer.AssertExpectations(t)
+	ser.AssertExpectations(t)
 }
 
 func TestLogMultipleErrorSerializer(t *testing.T) {
 	t.Parallel()
 	assert := require.New(t)
 
-	serializer := &serializer.MockSerializer[logData]{}
+	ser := &serializer.MockSerializer[logData]{}
 
 	data := []logData{
 		{Name: "test 1"},
 		{Name: "test 2"},
 	}
 
-	logger := &Logger[logData]{
-		serializer: serializer,
+	logger := &Logger[logData, *serializer.MockSerializer[logData]]{
+		serializer: ser,
 		delimiter:  '\n',
 	}
 
-	serializer.
+	ser.
 		On("SerializeMultipleWithDelimiter", data, '\n').
 		Return([]byte{}, errors.New("failed to serialize"))
 
@@ -76,32 +71,29 @@ func TestLogMultipleErrorSerializer(t *testing.T) {
 	assert.Error(err)
 	assert.Equal("failed to serialize", err.Error())
 
-	serializer.AssertExpectations(t)
+	ser.AssertExpectations(t)
 }
 
 func TestLogMultipleErrorWithWriter(t *testing.T) {
 	t.Parallel()
 	assert := require.New(t)
 
-	w := new(atomic.Pointer[io.Writer])
-	buff := &writer.MockWriter{}
-	var writer io.Writer = buff
-	w.Store(&writer)
+	buff := &writer.MockWriteCloser{}
 
-	serializer := &serializer.MockSerializer[logData]{}
+	ser := &serializer.MockSerializer[logData]{}
 
 	data := []logData{
 		{Name: "test 1"},
 		{Name: "test 2"},
 	}
 
-	logger := &Logger[logData]{
-		serializer: serializer,
-		handle:     w,
+	logger := &Logger[logData, *serializer.MockSerializer[logData]]{
+		serializer: ser,
+		handle:     buff,
 		delimiter:  '\n',
 	}
 
-	serializer.
+	ser.
 		On("SerializeMultipleWithDelimiter", data, '\n').
 		Return([]byte{0x1, '\n', 0x2, '\n'}, nil)
 
@@ -114,7 +106,7 @@ func TestLogMultipleErrorWithWriter(t *testing.T) {
 	assert.Error(err)
 	assert.Equal("failed to write", err.Error())
 
-	serializer.AssertExpectations(t)
+	ser.AssertExpectations(t)
 	buff.AssertExpectations(t)
 }
 
@@ -122,12 +114,9 @@ func TestLogMultipleNotEnoughBytesWritten(t *testing.T) {
 	t.Parallel()
 	assert := require.New(t)
 
-	w := new(atomic.Pointer[io.Writer])
-	buff := &writer.MockWriter{}
-	var writer io.Writer = buff
-	w.Store(&writer)
+	buff := &writer.MockWriteCloser{}
 
-	serializer := &serializer.MockSerializer[logData]{}
+	ser := &serializer.MockSerializer[logData]{}
 
 	data := []logData{
 		{Name: "test 1"},
@@ -136,14 +125,14 @@ func TestLogMultipleNotEnoughBytesWritten(t *testing.T) {
 
 	l := newMockLogger()
 
-	logger := &Logger[logData]{
-		serializer: serializer,
+	logger := &Logger[logData, *serializer.MockSerializer[logData]]{
+		serializer: ser,
 		error:      l,
-		handle:     w,
+		handle:     buff,
 		delimiter:  '\n',
 	}
 
-	serializer.
+	ser.
 		On("SerializeMultipleWithDelimiter", data, '\n').
 		Return([]byte{0x1, '\n', 0x2, '\n'}, nil)
 
@@ -156,7 +145,7 @@ func TestLogMultipleNotEnoughBytesWritten(t *testing.T) {
 	assert.NoError(err)
 	assert.EqualValues([]string{"{\"msg\":\"failed to write all data to the writer\",\"actualLen\":3,\"expectedLen\":4}"}, l.Buffer)
 
-	serializer.AssertExpectations(t)
+	ser.AssertExpectations(t)
 	buff.AssertExpectations(t)
 }
 
@@ -164,19 +153,16 @@ func TestLog(t *testing.T) {
 	t.Parallel()
 	assert := require.New(t)
 
-	w := new(atomic.Pointer[io.Writer])
 	buff := bytes.NewBuffer(make([]byte, 0, 100))
-	var writer io.Writer = buff
-	w.Store(&writer)
 
-	serializer := &serializer.MockSerializer[logData]{}
-	logger := &Logger[logData]{
-		serializer: serializer,
-		handle:     w,
+	ser := &serializer.MockSerializer[logData]{}
+	logger := &Logger[logData, *serializer.MockSerializer[logData]]{
+		serializer: ser,
+		handle:     buff,
 		delimiter:  '\n',
 	}
 
-	serializer.
+	ser.
 		On("SerializeMultipleWithDelimiter", []logData{{Name: "test 1"}}, '\n').
 		Return([]byte{0x1, '\n', 0x2}, nil)
 
@@ -185,5 +171,5 @@ func TestLog(t *testing.T) {
 	assert.NoError(err)
 
 	assert.EqualValues([]byte{0x1, '\n', 0x2}, buff.Bytes())
-	serializer.AssertExpectations(t)
+	ser.AssertExpectations(t)
 }
