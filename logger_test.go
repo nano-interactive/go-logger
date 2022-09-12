@@ -198,11 +198,8 @@ func TestLoggerIntegration(t *testing.T) {
 		os.Remove(filepath.Join(dir, "test.log"))
 	})
 
-	l := New[Data](
-		file,
-		real_serializer.NewJson[Data](),
-	)
-	cachedLogger := NewCached[Data](l, WithBufferSize(100), WithFlushRate(1))
+	l := New[Data](file,real_serializer.NewJson[Data]())
+	cachedLogger := NewCached[Data](l, WithBufferSize(100), WithFlushRate(5))
 
 	assert.NoError(cachedLogger.Log(Data{Name: "test1"}))
 	assert.NoError(cachedLogger.Log(Data{Name: "test2"}))
