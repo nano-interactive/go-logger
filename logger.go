@@ -25,7 +25,6 @@ type (
 		error      Error
 		serializer TSerializer
 		handle     io.Writer
-		delimiter  rune
 	}
 )
 
