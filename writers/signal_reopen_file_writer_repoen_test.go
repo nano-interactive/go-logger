@@ -40,8 +40,6 @@ func TestNewSignalReopen_ReplaceWriter_Error_On_Closer(t *testing.T) {
 	mockWriter.AssertExpectations(t)
 }
 
-
-
 func TestNewSignalReopen_ReplaceWriter(t *testing.T) {
 	t.Parallel()
 	assert := require.New(t)

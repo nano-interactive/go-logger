@@ -1,27 +1,22 @@
 package logging
 
-import (
-	"testing"
+// func TestNewWithCancel(t *testing.T) {
+// 	t.Parallel()
+// 	assert := require.New(t)
 
-	"github.com/stretchr/testify/require"
+// 	mockLogger := &logger.MockLogger{}
 
-	"github.com/nano-interactive/go-logger/__mocks__/logger"
-)
+// 	mockLogger.On("Close").Return(nil)
 
-func TestNewWithCancel(t *testing.T) {
-	t.Parallel()
-	assert := require.New(t)
+// 	cached := NewCached[any](
+// 		mockLogger,
+// 		WithBufferSize(100),
+// 		WithWorkerPool(5),
+// 		WithFlushRate(100),
+// 		WithRetryCount(0),
+// 	)
 
-	mockLogger := &logger.MockLogger{}
-
-	cached := NewCached[any](
-		mockLogger,
-		WithBufferSize(100),
-		WithWorkerPool(5),
-		WithFlushRate(100),
-		WithRetryCount(0),
-	)
-
-	assert.NotNil(cached)
-	assert.NoError(cached.Close())
-}
+// 	assert.NotNil(cached)
+// 	assert.NoError(cached.Close())
+// 	mockLogger.AssertExpectations(t)
+// }
