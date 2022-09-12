@@ -18,7 +18,7 @@ type CachedLogging[T any] struct {
 	chs    []chan T
 	chsLen uint64
 	idx    uint64
-	wg    *sync.WaitGroup
+	wg     *sync.WaitGroup
 }
 
 func NewCached[T any](log Log[T], mods ...ModifierCached) *CachedLogging[T] {
@@ -61,7 +61,7 @@ func NewCached[T any](log Log[T], mods ...ModifierCached) *CachedLogging[T] {
 		chs:    chs,
 		chsLen: uint64(len(chs)),
 		cancel: cancel,
-		wg: wg,
+		wg:     wg,
 	}
 }
 

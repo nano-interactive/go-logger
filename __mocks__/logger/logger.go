@@ -23,7 +23,6 @@ func (m *MockLogger) LogMultiple(data []interface{}) error {
 	return args.Error(0)
 }
 
-
 func (m *MockLogger) Close() error {
 	return nil
 }

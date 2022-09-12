@@ -50,4 +50,3 @@ func (j *Json[T]) Serialize(data []T) ([]byte, error) {
 
 	return enc.buf.Bytes(), nil
 }
-

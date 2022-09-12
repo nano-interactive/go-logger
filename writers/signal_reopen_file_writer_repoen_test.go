@@ -27,7 +27,6 @@ func TestNewSignalReopen_ReplaceWriter_Error_On_Closer(t *testing.T) {
 		return replaceWriter
 	}, errCh)
 
-
 	assert.NotNil(buffer)
 
 	p, _ := os.FindProcess(os.Getpid())

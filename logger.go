@@ -30,7 +30,7 @@ type (
 
 func New[T any, TSerializer serializer.Interface[T]](w io.Writer, serializer TSerializer, modifiers ...Modifier[T]) *Logger[T, TSerializer] {
 	cfg := Config[T]{
-		logger:    nopErrorLog,
+		logger: nopErrorLog,
 	}
 
 	for _, modifier := range modifiers {

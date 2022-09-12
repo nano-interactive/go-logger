@@ -39,7 +39,6 @@ func TestLogMultiple(t *testing.T) {
 	logger := &Logger[logData, *serializer.MockSerializer[logData]]{
 		serializer: ser,
 		handle:     buff,
-		delimiter:  '\n',
 	}
 
 	ser.
@@ -67,7 +66,6 @@ func TestLogMultipleErrorSerializer(t *testing.T) {
 
 	logger := &Logger[logData, *serializer.MockSerializer[logData]]{
 		serializer: ser,
-		delimiter:  '\n',
 	}
 
 	ser.
@@ -98,7 +96,6 @@ func TestLogMultipleErrorWithWriter(t *testing.T) {
 	logger := &Logger[logData, *serializer.MockSerializer[logData]]{
 		serializer: ser,
 		handle:     buff,
-		delimiter:  '\n',
 	}
 
 	ser.
@@ -137,7 +134,6 @@ func TestLogMultipleNotEnoughBytesWritten(t *testing.T) {
 		serializer: ser,
 		error:      l,
 		handle:     buff,
-		delimiter:  '\n',
 	}
 
 	ser.
@@ -167,7 +163,6 @@ func TestLog(t *testing.T) {
 	logger := &Logger[logData, *serializer.MockSerializer[logData]]{
 		serializer: ser,
 		handle:     buff,
-		delimiter:  '\n',
 	}
 
 	ser.
@@ -198,7 +193,7 @@ func TestLoggerIntegration(t *testing.T) {
 		os.Remove(filepath.Join(dir, "test.log"))
 	})
 
-	l := New[Data](file,real_serializer.NewJson[Data]())
+	l := New[Data](file, real_serializer.NewJson[Data]())
 	cachedLogger := NewCached[Data](l, WithBufferSize(100), WithFlushRate(5))
 
 	assert.NoError(cachedLogger.Log(Data{Name: "test1"}))

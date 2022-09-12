@@ -2,7 +2,7 @@ package logger
 
 type (
 	Config[T any] struct {
-		logger    Error
+		logger Error
 	}
 
 	CachedLoggingConfig struct {
@@ -22,7 +22,6 @@ var defaultCachedConfig = CachedLoggingConfig{
 	bufferSize: 1024,
 	retryCount: 1,
 }
-
 
 func WithErrorLogger[T any](err Error) Modifier[T] {
 	return func(c *Config[T]) {
