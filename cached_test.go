@@ -1,40 +1,22 @@
-package logging
+package logger
 
-import (
-	"context"
-	"path/filepath"
-	"syscall"
-	"testing"
+// func TestNewWithCancel(t *testing.T) {
+// 	t.Parallel()
+// 	assert := require.New(t)
 
-	"github.com/rs/zerolog"
-)
+// 	mockLogger := &logger.MockLogger{}
 
-type empty struct{}
+// 	mockLogger.On("Close").Return(nil)
 
-func BenchmarkCachedLogging_Log(b *testing.B) {
-	b.ReportAllocs()
+// 	cached := NewCached[any](
+// 		mockLogger,
+// 		WithBufferSize(100),
+// 		WithWorkerPool(5),
+// 		WithFlushRate(100),
+// 		WithRetryCount(0),
+// 	)
 
-	dir := b.TempDir()
-
-	file := filepath.Join(dir, "log.jsonl")
-
-	zerologLogger := zerolog.Nop()
-
-	ctx, cancel := context.WithCancel(context.Background())
-
-	logger := NewCached[empty](ctx, zerologLogger, New[empty](context.Background(), file, zerologLogger, syscall.SIGHUP), CachedLoggingConfig{
-		Workers:    2,
-		BufferSize: 1000,
-		FlushRate:  500,
-	})
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		err := logger.Log(empty{})
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
-
-	cancel()
-}
+// 	assert.NotNil(cached)
+// 	assert.NoError(cached.Close())
+// 	mockLogger.AssertExpectations(t)
+// }

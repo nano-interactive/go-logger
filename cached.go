@@ -1,94 +1,47 @@
-package logging
+package logger
 
 import (
 	"context"
 	"io"
+	"sync"
 	"sync/atomic"
-
-	"github.com/rs/zerolog"
 )
 
-var _ io.Closer = &CachedLogging[any]{}
-
-type CachedLoggingConfig struct {
-	Workers    int `json:"workers" mapstructure:"workers"`
-	BufferSize int `json:"buffer_size" mapstructure:"buffer_size"`
-	FlushRate  int `json:"flush_rate" mapstructure:"flush_rate"`
-	RetryCount int `json:"retry_count" mapstructure:"retry_count"`
-}
+var (
+	_ io.Closer = &CachedLogging[any]{}
+	_ Log[any]  = &CachedLogging[any]{}
+)
 
 type CachedLogging[T any] struct {
+	cancel context.CancelFunc
 	logger Log[T]
 	chs    []chan T
+	chsLen uint64
 	idx    uint64
+	wg     *sync.WaitGroup
 }
 
-func logWorker[T any](ctx context.Context, logger zerolog.Logger, log Log[T], ch <-chan T, flushRate, retryCount int) {
-	cache := make([]T, 0, flushRate)
-	retryQueue := make([]T, 0, flushRate)
+func NewCached[T any](log Log[T], mods ...ModifierCached) *CachedLogging[T] {
+	config := defaultCachedConfig
+	ctx, cancel := context.WithCancel(context.Background())
 
-	retryWrite := func() {
-		var err error
-		count := len(cache)
-		cache = cache[:0]
-
-		dataToWrite := cache
-		hasCopied := false
-		for i := 0; i < retryCount || err == nil; i++ {
-			if count > 0 {
-				err = log.LogMultiple(dataToWrite)
-				if err == nil {
-					break
-				}
-
-				if !hasCopied {
-					copy(retryQueue, cache)
-					cache = cache[:0]
-					dataToWrite = retryQueue
-					hasCopied = true
-				}
-
-				logger.Error().
-					Err(err).
-					Int("retry_count", i).
-					Int("max_retry_count", retryCount).
-					Int("flushRate", flushRate).
-					Bool("is_dropping_payload", i == retryCount-1).
-					Msg("Failed to log data")
-			}
-		}
-
-		cache = cache[:0]
-		retryQueue = retryQueue[:0]
+	for _, mod := range mods {
+		mod(&config)
 	}
 
-	for {
-		select {
-		case <-ctx.Done():
-			logger.Info().Int("logs_count", len(cache)).Msg("Flushing rest of the cached logs to file")
-
-			retryWrite()
-
-			return
-		case data := <-ch:
-			if len(cache) >= flushRate {
-				retryWrite()
-			} else {
-				cache = append(cache, data)
-			}
-		}
+	if config.retryCount <= 0 {
+		config.retryCount = 1
 	}
-}
 
-func NewCached[T any](ctx context.Context, logger zerolog.Logger, log Log[T], config CachedLoggingConfig) *CachedLogging[T] {
-	chs := make([]chan T, config.Workers)
-	cancelFns := make([]context.CancelFunc, 0, config.Workers)
-
-	for i := 0; i < config.Workers; i++ {
-		chs[i] = make(chan T, config.BufferSize)
+	chs := make([]chan T, config.workers)
+	cancelFns := make([]context.CancelFunc, 0, config.workers)
+	wg := &sync.WaitGroup{}
+	wg.Add(config.workers)
+	for i := 0; i < config.workers; i++ {
+		chs[i] = make(chan T, config.bufferSize)
 		workerCtx, cancel := context.WithCancel(context.Background())
 		cancelFns = append(cancelFns, cancel)
-		go logWorker(workerCtx, logger, log, chs[i], config.FlushRate, config.RetryCount)
+		go logWorker(workerCtx, wg, log, chs[i], config.bufferSize, config.retryCount)
 	}
 
 	go func(ctx context.Context) {
@@ -97,34 +50,44 @@ func NewCached[T any](ctx context.Context, logger zerolog.Logger, log Log[T], co
 		for _, cancel := range cancelFns {
 			cancel()
 		}
+
+		for _, ch := range chs {
+			close(ch)
+		}
 	}(ctx)
 
 	return &CachedLogging[T]{
 		logger: log,
 		chs:    chs,
+		chsLen: uint64(len(chs)),
+		cancel: cancel,
+		wg:     wg,
 	}
 }
 
 func (l *CachedLogging[T]) Log(log T) error {
-	idx := atomic.AddUint64(&l.idx, 1) % uint64(len(l.chs))
+	idx := atomic.AddUint64(&l.idx, 1) % l.chsLen
 
 	l.chs[idx] <- log
 	return nil
 }
 
 func (l *CachedLogging[T]) LogMultiple(logs []T) error {
-	for i, item := range logs {
+	length := uint64(len(logs))
+
+	for i := uint64(0); i < length; i++ {
 		// Evenly distribute the logs to the workers
-		l.chs[i%len(l.chs)] <- item
+		l.chs[i%l.chsLen] <- logs[i]
 	}
 
 	return nil
 }
 
 func (l *CachedLogging[T]) Close() error {
-	for _, ch := range l.chs {
-		close(ch)
-	}
+	c := l.cancel
+	c()
+
+	l.wg.Wait()
 
 	if logger, ok := l.logger.(io.Closer); ok {
 		return logger.Close()
