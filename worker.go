@@ -1,12 +1,14 @@
-package logging
+package logger
 
 import (
 	"context"
+	"sync"
 )
 
-func logWorker[T any](ctx context.Context, log Log[T], ch <-chan T, flushRate, retryCount int) {
-	cache := make([]T, 0, flushRate)
-	retryQueue := make([]T, 0, flushRate)
+func logWorker[T any](ctx context.Context, wg *sync.WaitGroup, log Log[T], ch <-chan T, bufferSize, retryCount int) {
+	cache := make([]T, 0, bufferSize)
+	retryQueue := make([]T, 0, bufferSize)
+	defer wg.Done()
 
 	retryWrite := func() {
 		var err error
@@ -37,19 +39,19 @@ func logWorker[T any](ctx context.Context, log Log[T], ch <-chan T, flushRate, r
 	for {
 		select {
 		case <-ctx.Done():
-			retryWrite()
-			return
+			goto flush
 		case data, more := <-ch:
 			if !more {
-				retryWrite()
-				return
+				goto flush
 			}
 
-			if len(cache) >= flushRate {
+			if len(cache) >= bufferSize {
 				retryWrite()
 			} else {
 				cache = append(cache, data)
 			}
 		}
 	}
+flush:
+	retryWrite()
 }

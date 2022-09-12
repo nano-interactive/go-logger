@@ -36,20 +36,7 @@ func NewJson[T any]() *Json[T] {
 	}
 }
 
-func (j *Json[T]) Serialize(v T) ([]byte, error) {
-	enc := j.jsonEncoders.Get().(*jsonEncoder)
-	defer j.jsonEncoders.Put(enc)
-	defer enc.buf.Reset()
-
-	err := enc.enc.Encode(v)
-	if err != nil {
-		return nil, err
-	}
-
-	return enc.buf.Bytes(), nil
-}
-
-func (j *Json[T]) SerializeMultipleWithDelimiter(data []T, delimiter rune) ([]byte, error) {
+func (j *Json[T]) Serialize(data []T) ([]byte, error) {
 	enc := j.jsonEncoders.Get().(*jsonEncoder)
 	defer j.jsonEncoders.Put(enc)
 	defer enc.buf.Reset()
@@ -59,9 +46,8 @@ func (j *Json[T]) SerializeMultipleWithDelimiter(data []T, delimiter rune) ([]by
 		if err != nil {
 			return nil, err
 		}
-
-		enc.buf.WriteRune(delimiter)
 	}
 
 	return enc.buf.Bytes(), nil
 }
+

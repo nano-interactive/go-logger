@@ -1,4 +1,4 @@
-package logging
+package logger
 
 // func TestLogWorker(t *testing.T) {
 // 	t.Parallel()

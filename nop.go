@@ -1,4 +1,4 @@
-package logging
+package logger
 
 var (
 	_           Error = NopErrorLogger{}

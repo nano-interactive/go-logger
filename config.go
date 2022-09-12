@@ -1,9 +1,8 @@
-package logging
+package logger
 
 type (
 	Config[T any] struct {
 		logger    Error
-		delimiter rune
 	}
 
 	CachedLoggingConfig struct {
@@ -21,7 +20,6 @@ type (
 var defaultCachedConfig = CachedLoggingConfig{
 	workers:    1,
 	bufferSize: 1024,
-	flushRate:  1,
 	retryCount: 1,
 }
 
@@ -29,12 +27,6 @@ var defaultCachedConfig = CachedLoggingConfig{
 func WithErrorLogger[T any](err Error) Modifier[T] {
 	return func(c *Config[T]) {
 		c.logger = err
-	}
-}
-
-func WithDelimiter[T any](delimiter rune) Modifier[T] {
-	return func(c *Config[T]) {
-		c.delimiter = delimiter
 	}
 }
 
@@ -46,7 +38,7 @@ func WithBufferSize(size int) ModifierCached {
 
 func WithWorkerPool(size int) ModifierCached {
 	return func(c *CachedLoggingConfig) {
-		c.bufferSize = size
+		c.workers = size
 	}
 }
 

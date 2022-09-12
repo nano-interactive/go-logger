@@ -1,4 +1,4 @@
-package logging
+package logger
 
 import (
 	"io"
@@ -32,7 +32,6 @@ type (
 func New[T any, TSerializer serializer.Interface[T]](w io.Writer, serializer TSerializer, modifiers ...Modifier[T]) *Logger[T, TSerializer] {
 	cfg := Config[T]{
 		logger:    nopErrorLog,
-		delimiter: '\n',
 	}
 
 	for _, modifier := range modifiers {
@@ -57,7 +56,7 @@ func (l *Logger[T, TSerializer]) Log(data T) error {
 const notEnoughBytesWritten = "{\"msg\":\"failed to write all data to the writer\",\"actualLen\":%d,\"expectedLen\":%d}"
 
 func (l *Logger[T, TSerializer]) LogMultiple(data []T) error {
-	rawData, err := l.serializer.SerializeMultipleWithDelimiter(data, l.delimiter)
+	rawData, err := l.serializer.Serialize(data)
 	if err != nil {
 		return err
 	}

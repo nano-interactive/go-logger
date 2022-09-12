@@ -1,4 +1,4 @@
-package logging
+package logger
 
 // func TestNewWithCancel(t *testing.T) {
 // 	t.Parallel()

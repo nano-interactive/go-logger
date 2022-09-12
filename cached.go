@@ -1,8 +1,9 @@
-package logging
+package logger
 
 import (
 	"context"
 	"io"
+	"sync"
 	"sync/atomic"
 )
 
@@ -17,6 +18,7 @@ type CachedLogging[T any] struct {
 	chs    []chan T
 	chsLen uint64
 	idx    uint64
+	wg    *sync.WaitGroup
 }
 
 func NewCached[T any](log Log[T], mods ...ModifierCached) *CachedLogging[T] {
@@ -33,12 +35,13 @@ func NewCached[T any](log Log[T], mods ...ModifierCached) *CachedLogging[T] {
 
 	chs := make([]chan T, config.workers)
 	cancelFns := make([]context.CancelFunc, 0, config.workers)
-
+	wg := &sync.WaitGroup{}
+	wg.Add(config.workers)
 	for i := 0; i < config.workers; i++ {
 		chs[i] = make(chan T, config.bufferSize)
 		workerCtx, cancel := context.WithCancel(context.Background())
 		cancelFns = append(cancelFns, cancel)
-		go logWorker(workerCtx, log, chs[i], config.flushRate, config.retryCount)
+		go logWorker(workerCtx, wg, log, chs[i], config.bufferSize, config.retryCount)
 	}
 
 	go func(ctx context.Context) {
@@ -47,6 +50,10 @@ func NewCached[T any](log Log[T], mods ...ModifierCached) *CachedLogging[T] {
 		for _, cancel := range cancelFns {
 			cancel()
 		}
+
+		for _, ch := range chs {
+			close(ch)
+		}
 	}(ctx)
 
 	return &CachedLogging[T]{
@@ -54,6 +61,7 @@ func NewCached[T any](log Log[T], mods ...ModifierCached) *CachedLogging[T] {
 		chs:    chs,
 		chsLen: uint64(len(chs)),
 		cancel: cancel,
+		wg: wg,
 	}
 }
 
@@ -79,9 +87,7 @@ func (l *CachedLogging[T]) Close() error {
 	c := l.cancel
 	c()
 
-	for _, ch := range l.chs {
-		close(ch)
-	}
+	l.wg.Wait()
 
 	if logger, ok := l.logger.(io.Closer); ok {
 		return logger.Close()
