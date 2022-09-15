@@ -8,10 +8,9 @@
         "CXX": "g++"
     },
     "go.docsTool": "guru",
-    "go.useLanguageServer": true,
     "go.autocompleteUnimportedPackages": true,
     "go.gotoSymbol.includeImports": true,
-    "go.inferGopath": true,
+    "go.inferGopath": false,
     "go.gotoSymbol.includeGoroot": true,
     "go.coverOnSave": true,
     "go.vetOnSave": "workspace",
