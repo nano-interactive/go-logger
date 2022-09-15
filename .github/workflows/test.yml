@@ -30,11 +30,11 @@ jobs:
       - name: Test ${{ matrix.go }}
         run: |
           make RACE=1 test
-      # - uses: codecov/codecov-action@v1
-      #   with:
-      #     token: ${{ secrets.CODECOV_TOKEN }}
-      #     file: ./coverage.txt
-      #     flags: tests
-      #     name: codecov-umbrella
-      #     fail_ci_if_error: true
-      #     verbose: true
+      - uses: codecov/codecov-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          file: ./coverage.txt
+          flags: tests
+          name: codecov-umbrella
+          fail_ci_if_error: true
+          verbose: true
