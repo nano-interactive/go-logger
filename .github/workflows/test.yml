@@ -27,9 +27,11 @@ jobs:
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-
+      - name: Set up gotestfmt
+        run: go install github.com/haveyoudebuggedit/gotestfmt/v2/cmd/gotestfmt@latest
       - name: Test ${{ matrix.go }}
         run: |
-          make RACE=1 test
+          go test -race -covermode=atomic -coverprofile=coverage.txt -timeout 5m -json -v ./... 2>&1 | gotestfmt
       - uses: codecov/codecov-action@v1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
