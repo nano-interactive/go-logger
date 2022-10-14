@@ -16,12 +16,19 @@ type (
 	}
 )
 
-func openFile(path string) {
-}
+func NewFileLogger[T any, TSerializer serializer.Interface[T]](path string, flags int, mode os.FileMode, serializer TSerializer, error ...Error) *FileLogger[T, TSerializer] {
+	var errLog Error
 
-func NewFileLogger[T any, TSerializer serializer.Interface[T]](path string, flags int, mode os.FileMode, serializer TSerializer, modifiers ...Modifier[T]) *FileLogger[T, TSerializer] {
+	if len(error) > 0 {
+		errLog = error[0]
+	}
+
 	return &FileLogger[T, TSerializer]{
 		serializer: serializer,
+		path:       path,
+		flags:      flags,
+		mode:       mode,
+		error:      errLog,
 	}
 }
 
@@ -35,31 +42,37 @@ func (l *FileLogger[T, TSerializer]) Log(data T) error {
 func (l *FileLogger[T, TSerializer]) LogMultiple(data []T) error {
 	rawData, err := l.serializer.Serialize(data)
 	if err != nil {
-		l.error.Print(failedToSerializeTheData, err)
+		if l.error != nil {
+			l.error.Print(failedToSerializeTheData, err)
+		}
 		return err
 	}
 
 	file, err := os.OpenFile(l.path, l.flags, l.mode)
 
 	if err != nil {
-		l.error.Print(failedToOpenFile, l.path, err)
+		if l.error != nil {
+			l.error.Print(failedToOpenFile, l.path, err)
+		}
 		return err
 	}
 
 	defer func(file *os.File) {
 		err := file.Close()
-		if err != nil {
+		if err != nil && l.error != nil {
 			l.error.Print(failedToCloseTheFile, l.path, err)
 		}
 	}(file)
 
 	n, err := file.Write(rawData)
 	if err != nil {
-		l.error.Print(failedToWriteToTheFile, l.path, err)
+		if l.error != nil {
+			l.error.Print(failedToWriteToTheFile, l.path, err)
+		}
 		return err
 	}
 
-	if n != len(rawData) {
+	if n != len(rawData) && l.error != nil {
 		l.error.Print(notEnoughBytesWritten, n, len(rawData))
 	}
 

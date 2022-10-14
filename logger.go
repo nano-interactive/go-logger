@@ -55,18 +55,24 @@ func (l *GenericLogger[T, TSerializer]) Log(data T) error {
 func (l *GenericLogger[T, TSerializer]) LogMultiple(data []T) error {
 	rawData, err := l.serializer.Serialize(data)
 	if err != nil {
-		l.error.Print(failedToSerializeTheData, err)
+		if l.error != nil {
+			l.error.Print(failedToSerializeTheData, err)
+		}
 		return err
 	}
 
 	n, err := l.handle.Write(rawData)
 	if err != nil {
-		l.error.Print(failedToWriteToTheFile, "", err)
+		if l.error != nil {
+			l.error.Print(failedToWriteToTheFile, "", err)
+		}
 		return err
 	}
 
 	if n != len(rawData) {
-		l.error.Print(notEnoughBytesWritten, n, len(rawData))
+		if l.error != nil {
+			l.error.Print(notEnoughBytesWritten, n, len(rawData))
+		}
 	}
 
 	return nil
