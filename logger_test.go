@@ -12,7 +12,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	real_serializer "github.com/nano-interactive/go-logger/serializer"
+	realserializer "github.com/nano-interactive/go-logger/serializer"
 
 	"github.com/nano-interactive/go-logger/__mocks__/error_log"
 	"github.com/nano-interactive/go-logger/__mocks__/serializer"
@@ -36,7 +36,7 @@ func TestLogMultiple(t *testing.T) {
 		{Name: "test 2"},
 	}
 
-	logger := &Logger[logData, *serializer.MockSerializer[logData]]{
+	logger := &GenericLogger[logData, *serializer.MockSerializer[logData]]{
 		serializer: ser,
 		handle:     buff,
 	}
@@ -64,7 +64,7 @@ func TestLogMultipleErrorSerializer(t *testing.T) {
 		{Name: "test 2"},
 	}
 
-	logger := &Logger[logData, *serializer.MockSerializer[logData]]{
+	logger := &GenericLogger[logData, *serializer.MockSerializer[logData]]{
 		serializer: ser,
 	}
 
@@ -93,7 +93,7 @@ func TestLogMultipleErrorWithWriter(t *testing.T) {
 		{Name: "test 2"},
 	}
 
-	logger := &Logger[logData, *serializer.MockSerializer[logData]]{
+	logger := &GenericLogger[logData, *serializer.MockSerializer[logData]]{
 		serializer: ser,
 		handle:     buff,
 	}
@@ -130,7 +130,7 @@ func TestLogMultipleNotEnoughBytesWritten(t *testing.T) {
 
 	l := error_log.NewMockLogger()
 
-	logger := &Logger[logData, *serializer.MockSerializer[logData]]{
+	logger := &GenericLogger[logData, *serializer.MockSerializer[logData]]{
 		serializer: ser,
 		error:      l,
 		handle:     buff,
@@ -160,7 +160,7 @@ func TestLog(t *testing.T) {
 	buff := bytes.NewBuffer(make([]byte, 0, 100))
 
 	ser := &serializer.MockSerializer[logData]{}
-	logger := &Logger[logData, *serializer.MockSerializer[logData]]{
+	logger := &GenericLogger[logData, *serializer.MockSerializer[logData]]{
 		serializer: ser,
 		handle:     buff,
 	}
@@ -189,11 +189,11 @@ func TestLoggerIntegration(t *testing.T) {
 	file, _ := os.OpenFile(filepath.Join(dir, "test.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 
 	t.Cleanup(func() {
-		file.Close()
-		os.Remove(filepath.Join(dir, "test.log"))
+		_ = file.Close()
+		_ = os.Remove(filepath.Join(dir, "test.log"))
 	})
 
-	l := New[Data](file, real_serializer.NewJson[Data]())
+	l := New[Data](file, realserializer.NewJson[Data]())
 	cachedLogger := NewCached[Data](l, WithBufferSize(100), WithFlushRate(5))
 
 	assert.NoError(cachedLogger.Log(Data{Name: "test1"}))

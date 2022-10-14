@@ -7,8 +7,8 @@ import (
 )
 
 var (
-	_ io.Closer = &Logger[any, *serializer.Json[any]]{}
-	_ Log[any]  = &Logger[any, *serializer.Json[any]]{}
+	_ io.Closer = &GenericLogger[any, *serializer.Json[any]]{}
+	_ Log[any]  = &GenericLogger[any, *serializer.Json[any]]{}
 )
 
 type (
@@ -21,14 +21,14 @@ type (
 		LogMultiple([]T) error
 	}
 
-	Logger[T any, TSerializer serializer.Interface[T]] struct {
+	GenericLogger[T any, TSerializer serializer.Interface[T]] struct {
 		error      Error
 		serializer TSerializer
 		handle     io.Writer
 	}
 )
 
-func New[T any, TSerializer serializer.Interface[T]](w io.Writer, serializer TSerializer, modifiers ...Modifier[T]) *Logger[T, TSerializer] {
+func New[T any, TSerializer serializer.Interface[T]](w io.Writer, serializer TSerializer, modifiers ...Modifier[T]) *GenericLogger[T, TSerializer] {
 	cfg := Config[T]{
 		logger: nopErrorLog,
 	}
@@ -37,7 +37,7 @@ func New[T any, TSerializer serializer.Interface[T]](w io.Writer, serializer TSe
 		modifier(&cfg)
 	}
 
-	l := &Logger[T, TSerializer]{
+	l := &GenericLogger[T, TSerializer]{
 		serializer: serializer,
 		handle:     w,
 	}
@@ -46,22 +46,22 @@ func New[T any, TSerializer serializer.Interface[T]](w io.Writer, serializer TSe
 }
 
 //go:inline
-func (l *Logger[T, TSerializer]) Log(data T) error {
+func (l *GenericLogger[T, TSerializer]) Log(data T) error {
 	many := [...]T{data}
 
 	return l.LogMultiple(many[:])
 }
 
-const notEnoughBytesWritten = "{\"msg\":\"failed to write all data to the writer\",\"actualLen\":%d,\"expectedLen\":%d}"
-
-func (l *Logger[T, TSerializer]) LogMultiple(data []T) error {
+func (l *GenericLogger[T, TSerializer]) LogMultiple(data []T) error {
 	rawData, err := l.serializer.Serialize(data)
 	if err != nil {
+		l.error.Print(failedToSerializeTheData, err)
 		return err
 	}
 
 	n, err := l.handle.Write(rawData)
 	if err != nil {
+		l.error.Print(failedToWriteToTheFile, "", err)
 		return err
 	}
 
@@ -72,7 +72,7 @@ func (l *Logger[T, TSerializer]) LogMultiple(data []T) error {
 	return nil
 }
 
-func (l *Logger[T, TSerializer]) Close() error {
+func (l *GenericLogger[T, TSerializer]) Close() error {
 	if closer, ok := l.handle.(io.Closer); ok {
 		return closer.Close()
 	}
