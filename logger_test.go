@@ -2,8 +2,10 @@ package logger
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,7 +14,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	realserializer "github.com/nano-interactive/go-logger/serializer"
+	realSerializer "github.com/nano-interactive/go-logger/serializer"
 
 	"github.com/nano-interactive/go-logger/__mocks__/error_log"
 	"github.com/nano-interactive/go-logger/__mocks__/serializer"
@@ -193,8 +195,8 @@ func TestLoggerIntegration(t *testing.T) {
 		_ = os.Remove(filepath.Join(dir, "test.log"))
 	})
 
-	l := New[Data](file, realserializer.NewJson[Data]())
-	cachedLogger := NewCached[Data](l, WithBufferSize(100), WithFlushRate(5))
+	l := New[Data](file, realSerializer.NewJson[Data]())
+	cachedLogger := NewCached[Data](context.Background(), l, WithBufferSize(100), WithFlushRate(5))
 
 	assert.NoError(cachedLogger.Log(Data{Name: "test1"}))
 	assert.NoError(cachedLogger.Log(Data{Name: "test2"}))
@@ -219,4 +221,227 @@ func TestLoggerIntegration(t *testing.T) {
 		`{"name":"test4"}`,
 		`{"name":"test5"}`,
 	}, lines)
+}
+
+func BenchmarkGenericLogger_OneByOne(b *testing.B) {
+	type data struct {
+		name    string
+		surname string
+	}
+
+	dir := b.TempDir()
+	s := realSerializer.NewJson[data]()
+	file, err := os.OpenFile(filepath.Join(dir, "test.json"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+
+	if err != nil {
+		b.Fatalf("Failed to open file: %v", err)
+	}
+
+	logger := New[data, *realSerializer.Json[data]](file, s)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		err := logger.Log(data{
+			name:    "test",
+			surname: "test",
+		})
+
+		if err != nil {
+			b.Errorf("Failed to log the data: %v", err)
+		}
+	}
+	b.StopTimer()
+
+	err = logger.Close()
+	if err != nil {
+		b.Errorf("Failed to close the logger: %v", err)
+	}
+
+	numOfLines := b.N
+
+	content, _ := os.ReadFile(filepath.Join(dir, "test.json"))
+	lines := strings.Split(string(content), "\n")
+	if lines[len(lines)-1] == "" {
+		numOfLines++
+	}
+
+	if len(lines) != numOfLines {
+		b.Errorf("Expected %d lines, got %d", numOfLines, len(lines))
+	}
+}
+
+func BenchmarkGenericLogger_Cached(b *testing.B) {
+	type data struct {
+		name    string
+		surname string
+	}
+
+	dir := b.TempDir()
+	s := realSerializer.NewJson[data]()
+	file, err := os.OpenFile(filepath.Join(dir, "test.json"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+
+	if err != nil {
+		b.Fatalf("Failed to open file: %v", err)
+	}
+
+	logger := New[data, *realSerializer.Json[data]](file, s)
+	cachedLogger := NewCached[data](context.Background(), logger, WithBufferSize(50), WithFlushRate(50), WithWorkerPool(2))
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		err := cachedLogger.Log(data{
+			name:    "test",
+			surname: "test",
+		})
+
+		if err != nil {
+			b.Errorf("Failed to log the data: %v", err)
+		}
+	}
+	b.StopTimer()
+
+	if err := cachedLogger.Close(); err != nil {
+		b.Errorf("Failed to close the logger: %v", err)
+	}
+
+	if err != nil {
+		b.Fatalf("Failed to close logger: %v", err)
+	}
+
+	numOfLines := b.N
+
+	content, _ := os.ReadFile(filepath.Join(dir, "test.json"))
+	lines := strings.Split(string(content), "\n")
+
+	if lines[len(lines)-1] == "" {
+		numOfLines++
+	}
+
+	if len(lines) != numOfLines {
+		b.Errorf("Expected %d lines, got %d", numOfLines, len(lines))
+	}
+}
+
+func BenchmarkGenericLogger_Batches(b *testing.B) {
+	type data struct {
+		name    string
+		surname string
+	}
+
+	dir := b.TempDir()
+	s := realSerializer.NewJson[data]()
+
+	file, err := os.OpenFile(filepath.Join(dir, "test.json"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+
+	if err != nil {
+		b.Fatalf("Failed to open file: %v", err)
+	}
+
+	logger := New[data, *realSerializer.Json[data]](file, s)
+
+	batches := make([][]data, 0, b.N)
+
+	numOfLines := 0
+	for i := 0; i < b.N; i++ {
+		items := make([]data, 0, 500)
+
+		for j := 0; j < 500; j++ {
+			items = append(items, data{
+				name:    "test",
+				surname: "test",
+			})
+		}
+
+		batches = append(batches, items)
+		numOfLines += len(items)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		err := logger.LogMultiple(batches[i])
+
+		if err != nil {
+			b.Errorf("Failed to log the data: %v", err)
+		}
+	}
+	b.StopTimer()
+
+	if err := logger.Close(); err != nil {
+		b.Errorf("Failed to close the logger: %v", err)
+	}
+
+	content, _ := os.ReadFile(filepath.Join(dir, "test.json"))
+	lines := strings.Split(string(content), "\n")
+
+	if lines[len(lines)-1] == "" {
+		numOfLines++
+	}
+
+	if len(lines) != numOfLines {
+		b.Errorf("Expected %d lines, got %d", numOfLines, len(lines))
+	}
+}
+
+func BenchmarkGenericLogger_Cached_Batches(b *testing.B) {
+	type data struct {
+		name    string
+		surname string
+	}
+
+	dir := b.TempDir()
+	s := realSerializer.NewJson[data]()
+
+	file, err := os.OpenFile(filepath.Join(dir, "test.json"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+
+	if err != nil {
+		b.Fatalf("Failed to open file: %v", err)
+	}
+
+	logger := New[data, *realSerializer.Json[data]](file, s)
+
+	cachedLogger := NewCached[data](context.Background(), logger, WithBufferSize(1000), WithFlushRate(1000), WithWorkerPool(5))
+
+	batches := make([][]data, 0, b.N)
+
+	numOfLines := 0
+	for i := 0; i < b.N; i++ {
+		value := rand.Intn(100)
+		items := make([]data, 0, value)
+
+		for j := 0; j < value; j++ {
+			items = append(items, data{
+				name:    "test",
+				surname: "test",
+			})
+		}
+
+		batches = append(batches, items)
+		numOfLines += value
+	}
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		err := cachedLogger.LogMultiple(batches[i])
+
+		if err != nil {
+			b.Errorf("Failed to log the data: %v", err)
+		}
+	}
+	b.StopTimer()
+
+	if err := cachedLogger.Close(); err != nil {
+		b.Fatal(err)
+	}
+
+	content, _ := os.ReadFile(filepath.Join(dir, "test.json"))
+	lines := strings.Split(string(content), "\n")
+
+	if lines[len(lines)-1] == "" {
+		numOfLines++
+	}
+
+	if len(lines) != numOfLines {
+		b.Errorf("Expected %d lines, got %d", numOfLines, len(lines))
+	}
 }

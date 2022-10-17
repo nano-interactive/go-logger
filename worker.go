@@ -12,16 +12,13 @@ func logWorker[T any](ctx context.Context, wg *sync.WaitGroup, log Log[T], ch <-
 
 	retryWrite := func() {
 		var err error
-		count := len(cache)
 
-		dataToWrite := cache
 		hasCopied := false
-		for i := 0; i < retryCount || err == nil; i++ {
-			if count == 0 {
-				break
-			}
+		dataToWrite := cache
 
+		for i := 0; i < retryCount; i++ {
 			if err = log.LogMultiple(dataToWrite); err == nil {
+				cache = cache[:0]
 				break
 			}
 
@@ -30,9 +27,12 @@ func logWorker[T any](ctx context.Context, wg *sync.WaitGroup, log Log[T], ch <-
 				dataToWrite = retryQueue
 				hasCopied = true
 			}
+
+			if i == 0 {
+				cache = cache[:0]
+			}
 		}
 
-		cache = cache[:0]
 		retryQueue = retryQueue[:0]
 	}
 
@@ -41,17 +41,21 @@ func logWorker[T any](ctx context.Context, wg *sync.WaitGroup, log Log[T], ch <-
 		case <-ctx.Done():
 			goto flush
 		case data, more := <-ch:
-			if !more {
-				goto flush
-			}
-
 			if len(cache) >= bufferSize {
 				retryWrite()
-			} else {
-				cache = append(cache, data)
+			}
+
+			cache = append(cache, data)
+
+			if !more {
+				goto flush
 			}
 		}
 	}
 flush:
+	for data := range ch {
+		cache = append(cache, data)
+	}
+
 	retryWrite()
 }

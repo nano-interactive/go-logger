@@ -21,9 +21,9 @@ type CachedLogging[T any] struct {
 	wg     *sync.WaitGroup
 }
 
-func NewCached[T any](log Log[T], mods ...ModifierCached) *CachedLogging[T] {
+func NewCached[T any](ctx context.Context, log Log[T], mods ...ModifierCached) *CachedLogging[T] {
 	config := defaultCachedConfig
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(ctx)
 
 	for _, mod := range mods {
 		mod(&config)
@@ -38,8 +38,8 @@ func NewCached[T any](log Log[T], mods ...ModifierCached) *CachedLogging[T] {
 	wg := &sync.WaitGroup{}
 	wg.Add(config.workers)
 	for i := 0; i < config.workers; i++ {
-		chs[i] = make(chan T, config.bufferSize)
-		workerCtx, cancel := context.WithCancel(context.Background())
+		chs[i] = make(chan T, 4096)
+		workerCtx, cancel := context.WithCancel(ctx)
 		cancelFns = append(cancelFns, cancel)
 		go logWorker(workerCtx, wg, log, chs[i], config.bufferSize, config.retryCount)
 	}

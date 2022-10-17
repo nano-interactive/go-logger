@@ -9,5 +9,11 @@ type MockSerializer[T any] struct {
 func (m *MockSerializer[T]) Serialize(data []T) ([]byte, error) {
 	args := m.Called(data)
 
-	return args.Get(0).([]byte), args.Error(1)
+	result := args.Get(0)
+
+	if result != nil {
+		return result.([]byte), args.Error(1)
+	}
+
+	return nil, args.Error(1)
 }

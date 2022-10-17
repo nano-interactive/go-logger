@@ -17,7 +17,7 @@ type (
 )
 
 func NewFileLogger[T any, TSerializer serializer.Interface[T]](path string, flags int, mode os.FileMode, serializer TSerializer, error ...Error) *FileLogger[T, TSerializer] {
-	var errLog Error
+	var errLog Error = nil
 
 	if len(error) > 0 {
 		errLog = error[0]
