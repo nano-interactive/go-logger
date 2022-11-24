@@ -37,6 +37,7 @@ func NewCached[T any](ctx context.Context, log Log[T], mods ...ModifierCached) *
 	cancelFns := make([]context.CancelFunc, 0, config.workers)
 	wg := &sync.WaitGroup{}
 	wg.Add(config.workers)
+
 	for i := 0; i < config.workers; i++ {
 		chs[i] = make(chan T, 4096)
 		workerCtx, cancel := context.WithCancel(ctx)
@@ -47,12 +48,10 @@ func NewCached[T any](ctx context.Context, log Log[T], mods ...ModifierCached) *
 	go func(ctx context.Context) {
 		<-ctx.Done()
 
-		for _, cancel := range cancelFns {
+		for i := 0; i < config.workers; i++ {
+			cancel := cancelFns[i]
+			close(chs[i])
 			cancel()
-		}
-
-		for _, ch := range chs {
-			close(ch)
 		}
 	}(ctx)
 

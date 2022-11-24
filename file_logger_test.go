@@ -120,7 +120,7 @@ func BenchmarkFileLogger_Cached(b *testing.B) {
 	s := realSerializer.NewJson[data]()
 	logger := NewFileLogger[data](filepath.Join(dir, "test.json"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644, s)
 
-	cachedLogger := NewCached[data](context.Background(), logger, WithBufferSize(50), WithFlushRate(50), WithWorkerPool(2))
+	cachedLogger := NewCached[data](context.Background(), logger, WithBufferSize(50), WithWorkerPool(2))
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -213,7 +213,7 @@ func BenchmarkFileLogger_Cached_Batches(b *testing.B) {
 	s := realSerializer.NewJson[data]()
 	logger := NewFileLogger[data](filepath.Join(dir, "test.json"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644, s)
 
-	cachedLogger := NewCached[data](context.Background(), logger, WithBufferSize(1000), WithFlushRate(1000), WithWorkerPool(5))
+	cachedLogger := NewCached[data](context.Background(), logger, WithBufferSize(1000),  WithWorkerPool(5))
 
 	batches := make([][]data, 0, b.N)
 

@@ -196,7 +196,7 @@ func TestLoggerIntegration(t *testing.T) {
 	})
 
 	l := New[Data](file, realSerializer.NewJson[Data]())
-	cachedLogger := NewCached[Data](context.Background(), l, WithBufferSize(100), WithFlushRate(5))
+	cachedLogger := NewCached[Data](context.Background(), l, WithBufferSize(100))
 
 	assert.NoError(cachedLogger.Log(Data{Name: "test1"}))
 	assert.NoError(cachedLogger.Log(Data{Name: "test2"}))
@@ -285,7 +285,7 @@ func BenchmarkGenericLogger_Cached(b *testing.B) {
 	}
 
 	logger := New[data, *realSerializer.Json[data]](file, s)
-	cachedLogger := NewCached[data](context.Background(), logger, WithBufferSize(50), WithFlushRate(50), WithWorkerPool(2))
+	cachedLogger := NewCached[data](context.Background(), logger, WithBufferSize(50), WithWorkerPool(2))
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -399,7 +399,7 @@ func BenchmarkGenericLogger_Cached_Batches(b *testing.B) {
 
 	logger := New[data, *realSerializer.Json[data]](file, s)
 
-	cachedLogger := NewCached[data](context.Background(), logger, WithBufferSize(1000), WithFlushRate(1000), WithWorkerPool(5))
+	cachedLogger := NewCached[data](context.Background(), logger, WithBufferSize(1000), WithWorkerPool(5))
 
 	batches := make([][]data, 0, b.N)
 

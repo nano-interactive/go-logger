@@ -8,7 +8,6 @@ type (
 	CachedLoggingConfig struct {
 		bufferSize int
 		workers    int
-		flushRate  int
 		retryCount int
 	}
 
@@ -38,12 +37,6 @@ func WithBufferSize(size int) ModifierCached {
 func WithWorkerPool(size int) ModifierCached {
 	return func(c *CachedLoggingConfig) {
 		c.workers = size
-	}
-}
-
-func WithFlushRate(rate int) ModifierCached {
-	return func(c *CachedLoggingConfig) {
-		c.flushRate = rate
 	}
 }
 
